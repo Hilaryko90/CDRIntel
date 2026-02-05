@@ -1,0 +1,20 @@
+import jwt, random, datetime
+
+SECRET_KEY = "supersecretkey"
+
+def create_jwt(user):
+    payload = {
+        "username": user.username,
+        "role": user.role,
+        "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
+def verify_jwt(token):
+    try:
+        return jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+    except:
+        return None
+
+def generate_otp():
+    return str(random.randint(100000, 999999))

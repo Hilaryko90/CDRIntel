@@ -1,0 +1,16 @@
+from dash import html, dash_table
+import dash_bootstrap_components as dbc
+
+def admin_dashboard(cdr_df, audit_df):
+    return dbc.Container([
+        html.H1("Admin Dashboard"),
+        html.P("Full access to all cases and audit logs")
+        # Add KPI cards and tables here
+    ])
+
+def investigator_dashboard(cdr_df):
+    return dbc.Container([
+        html.H1("Investigator Dashboard"),
+        html.P("Limited view: only assigned cases")
+        # Add KPI cards and tables for investigator
+    ])

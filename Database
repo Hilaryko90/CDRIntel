@@ -1,0 +1,26 @@
+from sqlalchemy import create_engine, Column, String, Integer
+from sqlalchemy.orm import declarative_base, sessionmaker
+
+engine = create_engine("sqlite:///cdr_intel.db")
+Base = declarative_base()
+Session = sessionmaker(bind=engine)
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True)
+    username = Column(String, unique=True)
+    password = Column(String)  # hashed
+    role = Column(String)      # "admin" or "investigator"
+    email = Column(String)
+    phone = Column(String)
+
+Base.metadata.create_all(engine)
+
+# Example: create sample users
+session = Session()
+session.add_all([
+    User(username="admin1", password="admin123", role="admin", email="admin@cdr.com", phone="0712345678"),
+    User(username="inv1", password="inv123", role="investigator", email="inv@cdr.com", phone="0798765432")
+])
+session.commit()
+session.close()

@@ -1,0 +1,9 @@
+from dash import html, dcc
+import dash_bootstrap_components as dbc
+
+otp_layout = dbc.Container([
+    html.H2("Enter OTP", className="text-center"),
+    dbc.Input(id="otp-input", placeholder="6-digit code", type="text", className="mb-2"),
+    dbc.Button("Verify OTP", id="verify-btn", color="success", className="mb-2"),
+    html.Div(id="otp-message", className="text-danger")
+])

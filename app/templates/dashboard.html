@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CDR Intel Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>CDR Intel Interactive Dashboard</h1>
+
+    <canvas id="usersChart" width="600" height="400"></canvas>
+    <canvas id="otpChart" width="600" height="400"></canvas>
+
+    <script>
+        // Pass data from FastAPI
+        const usersData = {{ users_data | safe }};
+        const otpData = {{ otp_data | safe }};
+
+        // Users Chart
+        const ctx1 = document.getElementById('usersChart').getContext('2d');
+        new Chart(ctx1, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(usersData),
+                datasets: [{
+                    label: 'Number of Users',
+                    data: Object.values(usersData),
+                    backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: true }
+                }
+            }
+        });
+
+        // OTP Requests Chart
+        const ctx2 = document.getElementById('otpChart').getContext('2d');
+        new Chart(ctx2, {
+            type: 'line',
+            data: {
+                labels: Object.keys(otpData),
+                datasets: [{
+                    label: 'OTP Requests',
+                    data: Object.values(otpData),
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    fill: true,
+                    tension: 0.3
+                }]
+            },
+            options: { responsive: true }
+        });
+    </script>
+</body>
+</html>

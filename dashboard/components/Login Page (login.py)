@@ -1,0 +1,10 @@
+from dash import html, dcc
+import dash_bootstrap_components as dbc
+
+login_layout = dbc.Container([
+    html.H2("CDR Intel Login", className="text-center"),
+    dbc.Input(id="username", placeholder="Username", type="text", className="mb-2"),
+    dbc.Input(id="password", placeholder="Password", type="password", className="mb-2"),
+    dbc.Button("Login", id="login-btn", color="primary", className="mb-2"),
+    html.Div(id="login-message", className="text-danger")
+])
