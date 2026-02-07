@@ -1,0 +1,9 @@
+{
+  "python.defaultInterpreterPath": "C:\\Users\\user\\Desktop\\CDR_Intel_Final_Package\\venv\\Scripts\\python.exe",
+
+  "python.analysis.typeCheckingMode": "basic",
+
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportMissingImports": "none"
+  }
+}

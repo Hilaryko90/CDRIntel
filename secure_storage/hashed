@@ -1,0 +1,34 @@
+import hashlib
+from pathlib import Path
+
+# Folder where raw files are stored
+RAW_STORAGE = Path("CDR_Intel_Final_Package/secure_storage/raw")
+HASH_STORAGE = Path("CDR_Intel_Final_Package/secure_storage/hashed")
+
+# Make sure folders exist
+RAW_STORAGE.mkdir(parents=True, exist_ok=True)
+HASH_STORAGE.mkdir(parents=True, exist_ok=True)
+
+def compute_file_hash(file_path: Path) -> str:
+    """Compute SHA-256 hash of a file."""
+    sha256_hash = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(chunk)
+    return sha256_hash.hexdigest()
+
+def save_file_hash(file_path: Path, file_id: str):
+    """Save the SHA-256 hash to a .sha256 file."""
+    file_hash = compute_file_hash(file_path)
+    hash_file_path = HASH_STORAGE / f"{file_id}.sha256"
+    with open(hash_file_path, "w") as h:
+        h.write(file_hash)
+    return file_hash
+
+# Example usage
+file_path = RAW_STORAGE / "example_file.pdf"
+file_id = "123e4567-e89b-12d3-a456-426614174000"
+
+# Compute and save hash
+hash_value = save_file_hash(file_path, file_id)
+print(f"SHA-256 hash for {file_id}: {hash_value}")

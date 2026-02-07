@@ -1,0 +1,22 @@
+from pathlib import Path
+from datetime import datetime
+
+LOG_STORAGE = Path("CDR_Intel_Final_Package/secure_storage/logs")
+LOG_STORAGE.mkdir(parents=True, exist_ok=True)
+
+def log_action(action: str, file_id: str, user: str, sha256: str = ""):
+    """
+    Append a log entry for file uploads or reads.
+
+    Parameters:
+    - action: 'UPLOAD' or 'READ'
+    - file_id: unique file identifier
+    - user: who performed the action (e.g., API key or username)
+    - sha256: optional SHA-256 hash of the file
+    """
+    log_file = LOG_STORAGE / f"{datetime.now().strftime('%Y-%m-%d')}.log"
+    timestamp = datetime.now().isoformat()
+    entry = f"{timestamp} | {user} | {action} | {file_id} | {sha256}\n"
+    
+    with open(log_file, "a") as f:
+        f.write(entry)
