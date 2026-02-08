@@ -1,5 +1,9 @@
+# =====================================================
+# IMPORTS
+# =====================================================
 import os
 import hashlib
+import base64
 import pandas as pd
 import io
 from flask import Flask, redirect, request
@@ -8,7 +12,7 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 import dash
 from dash import html, dcc, dash_table
 import dash_bootstrap_components as dbc
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 
 import plotly.express as px
 import plotly.graph_objects as go
@@ -157,7 +161,7 @@ def analyze_cdr(df):
     return result
 
 # =====================================================
-# LOAD DATA
+# LOAD INITIAL DATA
 # =====================================================
 cdr_df = ingest_cdr_files()
 intel = analyze_cdr(cdr_df)
@@ -171,10 +175,25 @@ app.layout = dbc.Container([
     html.H1("📊 CDR Intel Dashboard", className="text-center my-4"),
     dbc.Button("Logout", href="/logout", color="danger"),
     html.Hr(),
+
+    html.H3("📥 Upload CDR File"),
+    dcc.Upload(
+        id='upload-cdr',
+        children=html.Div(['Drag and Drop or ', html.A('Select Files')]),
+        style={
+            'width': '100%', 'height': '60px', 'lineHeight': '60px',
+            'borderWidth': '1px', 'borderStyle': 'dashed',
+            'borderRadius': '5px', 'textAlign': 'center', 'marginBottom': '20px'
+        },
+        multiple=True
+    ),
+
     html.H3("📊 Intelligence Summary"),
-    html.Ul([html.Li(f"{k}: {v}") for k,v in intel["summary"].items()]),
+    html.Ul(id="intel-summary"),
+
     html.H4("🚨 Actionable Intelligence"),
-    html.Ul([html.Li(text) for text in intel["insights"]]),
+    html.Ul(id="intel-insights"),
+
     html.Hr(),
     html.H3("📁 CDR Records"),
     dbc.Row([
@@ -196,10 +215,13 @@ app.layout = dbc.Container([
     html.Hr(),
     html.H3("⏱ Call Timeline"),
     dcc.Graph(id="timeline-graph", figure=intel["timeline"] if intel["timeline"] else {}),
+
     html.H3("🗺 Call Geo Map"),
     dcc.Graph(id="geo-map", figure=intel["geo_map"] if intel["geo_map"] else {}),
+
     html.H3("📡 Call Network Graph"),
     dcc.Graph(id="network-graph", figure=intel["network_graph"] if intel["network_graph"] else {}),
+
     html.Hr(),
     dbc.Button("📥 Download Evidence Report", id="download-btn", color="success"),
     dcc.Download(id="download-report")
@@ -210,18 +232,45 @@ app.layout = dbc.Container([
 # =====================================================
 @app.callback(
     Output("cdr-table", "data"),
+    Output("intel-summary", "children"),
+    Output("intel-insights", "children"),
+    Output("timeline-graph", "figure"),
+    Output("geo-map", "figure"),
+    Output("network-graph", "figure"),
     Input("filter-caller", "value"),
     Input("filter-receiver", "value"),
     Input("filter-date", "start_date"),
-    Input("filter-date", "end_date")
+    Input("filter-date", "end_date"),
+    Input("upload-cdr", "contents"),
+    State("upload-cdr", "filename")
 )
-def filter_cdr(caller, receiver, start_date, end_date):
+def update_dashboard(caller, receiver, start_date, end_date, contents, filenames):
+    global cdr_df, intel
+    # Process uploads
+    if contents:
+        for content, filename in zip(contents, filenames):
+            content_type, content_string = content.split(',')
+            decoded = io.BytesIO(base64.b64decode(content_string))
+            try:
+                if filename.endswith(".csv"):
+                    new_df = pd.read_csv(decoded)
+                else:
+                    new_df = pd.read_excel(decoded)
+                new_df.columns = [c.lower().strip() for c in new_df.columns]
+                cdr_df = pd.concat([cdr_df, new_df], ignore_index=True)
+            except Exception as e:
+                print(f"Error processing {filename}: {e}")
+    # Filter
     df = cdr_df.copy()
     if caller: df = df[df["caller"].str.contains(caller, case=False, na=False)]
     if receiver: df = df[df["receiver"].str.contains(receiver, case=False, na=False)]
     if start_date: df = df[df["timestamp"] >= pd.to_datetime(start_date)]
     if end_date: df = df[df["timestamp"] <= pd.to_datetime(end_date)]
-    return df.to_dict("records")
+    # Analyze
+    intel = analyze_cdr(df)
+    summary_list = [html.Li(f"{k}: {v}") for k,v in intel["summary"].items()]
+    insights_list = [html.Li(text) for text in intel["insights"]]
+    return df.to_dict("records"), summary_list, insights_list, intel["timeline"], intel["geo_map"], intel["network_graph"]
 
 @app.callback(
     Output("download-report", "data"),
