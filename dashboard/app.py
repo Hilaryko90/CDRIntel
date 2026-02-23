@@ -17,6 +17,10 @@ import plotly.graph_objects as go
 import networkx as nx
 from sklearn.ensemble import IsolationForest
 
+# Global DataFrame to store cases
+# -------------------------------
+case_df = pd.DataFrame(columns=["Case ID", "Case Description", "Targets"])
+
 # =====================================================
 # FLASK SERVER
 # =====================================================
@@ -212,6 +216,156 @@ def analyze_cdr(df):
         )
 
     return result
+# =====================================================
+# AI INTELLIGENCE SUMMARY
+# =====================================================
+def generate_intelligence_report(df, intel):
+    if df.empty:
+        return ["No CDR data available"]
+
+    insights = []
+
+    total_calls = len(df)
+    unique_callers = df["caller"].nunique()
+    unique_receivers = df["receiver"].nunique()
+
+    insights.append(f"Total calls analyzed: {total_calls}")
+    insights.append(f"Unique callers: {unique_callers}")
+    insights.append(f"Unique receivers: {unique_receivers}")
+
+    # Suspicious activity detection
+    high_freq = df["caller"].value_counts()
+    suspicious_numbers = high_freq[high_freq > high_freq.mean() * 3]
+
+    if not suspicious_numbers.empty:
+        for number, count in suspicious_numbers.items():
+            insights.append(f"⚠️ High activity detected from {number} ({count} calls)")
+
+    # Long duration calls
+    long_calls = df[df["duration"] > df["duration"].mean() * 3]
+    if not long_calls.empty:
+        insights.append(f"⚠️ {len(long_calls)} unusually long calls detected")
+
+    # Night activity pattern
+    if "timestamp" in df.columns:
+        night_calls = df[df["timestamp"].dt.hour.between(0, 5)]
+        if len(night_calls) > total_calls * 0.3:
+            insights.append("⚠️ Heavy night-time call activity detected")
+
+    # Risk score
+    anomaly_count = len(intel["anomalies"])
+    risk_score = min(100, int((anomaly_count / max(total_calls, 1)) * 500))
+    insights.append(f"Fraud Risk Score: {risk_score}/100")
+
+    if risk_score > 70:
+        insights.append("🚨 HIGH RISK communication pattern detected")
+    elif risk_score > 40:
+        insights.append("⚠️ MODERATE RISK pattern detected")
+    else:
+        insights.append("✅ Low risk pattern")
+
+    return insights
+
+html.H3("🕵️ Investigation Assessment"),
+html.H4(id="risk-score"),
+html.Ul(id="investigation-findings"),
+
+
+# =====================================================
+# INVESTIGATION ENGINE
+# =====================================================
+def run_investigation(df, intel):
+    case = get_active_case()
+    report = {
+        "risk_score": 0,
+        "findings": []
+    }
+
+    if df.empty or not case:
+        return report
+
+    targets = set(case["targets"])
+    risk = 0
+
+    # ---------- TARGET CONTACTS ----------
+    for number in targets:
+        hits = df[(df["caller"] == number) | (df["receiver"] == number)]
+        if not hits.empty:
+            text = f"Target activity detected: {number} ({len(hits)} calls)"
+            report["findings"].append(text)
+            risk += len(hits)
+
+    # ---------- ANOMALIES ----------
+    anomalies = intel["anomalies"]
+    if not anomalies.empty:
+        report["findings"].append(f"{len(anomalies)} anomalous calls detected")
+        risk += len(anomalies) * 2
+
+    # ---------- HIGH FREQUENCY LINKS ----------
+    pairs = df.groupby(["caller", "receiver"]).size().reset_index(name="count")
+    strong = pairs[pairs["count"] > pairs["count"].mean() * 3]
+    for _, row in strong.iterrows():
+        report["findings"].append(
+            f"Strong communication: {row['caller']} ↔ {row['receiver']}"
+        )
+        risk += 5
+
+    report["risk_score"] = min(100, risk)
+
+    case["risk_score"] = report["risk_score"]
+    case["findings"] = report["findings"]
+
+    return report
+
+
+    # ---------- WATCHLIST ----------
+    WATCHLIST = {"99999", "12345", "55555"}  # add real targets here
+
+    for number in WATCHLIST:
+        hits = df[(df["caller"] == number) | (df["receiver"] == number)]
+        if not hits.empty:
+            report["watchlist_hits"].append(f"Watchlist contact detected: {number} ({len(hits)} calls)")
+
+    # ---------- COMMUNICATION CLUSTERS ----------
+    if "caller" in df.columns and "receiver" in df.columns:
+        pairs = df.groupby(["caller", "receiver"]).size().reset_index(name="count")
+        strong_links = pairs[pairs["count"] > pairs["count"].mean() * 3]
+
+        for _, row in strong_links.iterrows():
+            report["clusters"].append(
+                f"High-frequency link: {row['caller']} ↔ {row['receiver']} ({row['count']} calls)"
+            )
+
+    # ---------- SUSPICIOUS TIMELINE ----------
+    if "timestamp" in df.columns:
+        df["hour"] = df["timestamp"].dt.hour
+        night_activity = df[df["hour"].between(0, 5)]
+        if len(night_activity) > len(df) * 0.25:
+            report["suspicious_timeline"].append("Heavy communication during night hours")
+
+    # ---------- RISK SCORE ----------
+    anomaly_count = len(intel["anomalies"])
+    watchlist_weight = len(report["watchlist_hits"]) * 15
+    cluster_weight = len(report["clusters"]) * 10
+    anomaly_weight = anomaly_count * 2
+
+    score = anomaly_weight + watchlist_weight + cluster_weight
+    report["risk_score"] = min(100, score)
+
+    # ---------- FINDINGS ----------
+    if report["risk_score"] > 70:
+        report["findings"].append("🚨 High-risk communication network detected")
+    elif report["risk_score"] > 40:
+        report["findings"].append("⚠️ Suspicious behavioral patterns detected")
+    else:
+        report["findings"].append("No critical threats detected")
+
+    report["findings"].extend(report["watchlist_hits"])
+    report["findings"].extend(report["clusters"])
+    report["findings"].extend(report["suspicious_timeline"])
+
+    return report
+
 
 # =====================================================
 # LOAD INITIAL DATA
@@ -234,8 +388,35 @@ app.layout = dbc.Container([
     html.H3("📊 Intelligence Summary"),
     html.Ul([html.Li(f"{k}: {v}") for k,v in intel["summary"].items()]),
     html.H4("🚨 Actionable Intelligence"),
+    html.H3("🧠 AI Intelligence Assessment"),
+    html.Ul(id="ai-report"),
     html.Ul([html.Li(text) for text in intel["insights"]]),
     html.Hr(),
+    html.Hr(),
+
+# ================= Analyst Case Workspace =================
+html.H3("📂 Analyst Case Workspace"),
+dbc.Row([
+    dbc.Col(dcc.Input(id="case-id-input", placeholder="Case ID"), width=3),
+    dbc.Col(dcc.Input(id="case-desc-input", placeholder="Case Description"), width=4),
+    dbc.Col(dcc.Input(id="case-targets-input", placeholder="Targets (comma-separated)"), width=3),
+    dbc.Col(dbc.Button("Create Case", id="create-case-btn", n_clicks=0, color="primary"), width=2)
+], className="mb-3"),
+dash_table.DataTable(
+    id="case-table",
+    columns=[
+        {"name": "Case ID", "id": "Case ID"},
+        {"name": "Case Description", "id": "Case Description"},
+        {"name": "Targets", "id": "Targets"}
+    ],
+    data=[],
+    page_size=5,
+    style_table={"overflowX": "auto"}
+),
+html.Hr(),
+
+html.H3("📁 CDR Records"),
+
     html.H3("📁 CDR Records"),
     dbc.Row([
         dbc.Col(dcc.Input(id="filter-caller", placeholder="Filter by Caller", type="text"), width=3),
@@ -278,24 +459,84 @@ app.layout = dbc.Container([
 ], fluid=True)
 
 # =====================================================
+# CASE MANAGEMENT
+# =====================================================
+CASES = {}
+ACTIVE_CASE = {"id": None}
+
+def create_case(case_id, description, targets):
+    CASES[case_id] = {
+        "description": description,
+        "targets": targets,
+        "findings": [],
+        "risk_score": 0
+    }
+    ACTIVE_CASE["id"] = case_id
+
+def get_active_case():
+    cid = ACTIVE_CASE["id"]
+    return CASES.get(cid) if cid else None
+
+# =====================================================
 # DASH CALLBACKS
 # =====================================================
+from dash import ctx
+
+# -------------------------------
+# CREATE NEW CASE
+# -------------------------------
+@app.callback(
+    Output("case-table", "data"),
+    Input("create-case-btn", "n_clicks"),
+    State("case-id-input", "value"),
+    State("case-desc-input", "value"),
+    State("case-targets-input", "value"),
+    prevent_initial_call=True
+)
+def create_new_case(n_clicks, case_id, description, targets):
+    global case_df
+    if n_clicks:
+        if not case_id or not description:
+            return dash.no_update
+        new_case = {
+            "Case ID": case_id.strip(),
+            "Case Description": description.strip(),
+            "Targets": targets.strip() if targets else ""
+        }
+        case_df = pd.concat([case_df, pd.DataFrame([new_case])], ignore_index=True)
+        return case_df.to_dict("records")
+    return dash.no_update
+
+# -------------------------------
+# UPDATE DASHBOARD BASED ON FILTERS & UPLOADS
+# -------------------------------
 @app.callback(
     Output("cdr-table", "data"),
     Output("timeline-graph", "figure"),
     Output("geo-map", "figure"),
     Output("network-graph", "figure"),
+    Output("ai-report", "children"),
+    Output("risk-score", "children"),
+    Output("investigation-findings", "children"),
+    Output("active-case-info", "children"),
+    Output("case-risk-score", "children"),
+    Output("case-findings", "children"),
     Input("filter-caller", "value"),
     Input("filter-receiver", "value"),
     Input("filter-date", "start_date"),
     Input("filter-date", "end_date"),
     Input("upload-cdr", "contents"),
+    Input("create-case-btn", "n_clicks"),
+    State("case-id-input", "value"),
+    State("case-desc-input", "value"),
+    State("case-targets-input", "value"),
     State("upload-cdr", "filename")
 )
-def update_dashboard(caller, receiver, start_date, end_date, uploaded_contents, filenames):
-    global cdr_df
+def update_dashboard_case(caller, receiver, start_date, end_date, uploaded_contents, n_clicks,
+                          case_id, case_desc, case_targets, filenames):
+    global cdr_df, case_df
 
-    # Handle file upload
+    # ---- Handle uploaded CDR files ----
     if uploaded_contents is not None:
         os.makedirs("cdr_files", exist_ok=True)
         for content, name in zip(uploaded_contents, filenames):
@@ -312,33 +553,80 @@ def update_dashboard(caller, receiver, start_date, end_date, uploaded_contents, 
                 continue
             df_new = normalize_columns(df_new)
             cdr_df = pd.concat([cdr_df, df_new], ignore_index=True)
-        print("CDR records loaded:", len(cdr_df))
 
-    intel_updated = analyze_cdr(cdr_df)
+    # ---- Create new case if button pressed ----
+    active_case_info = ""
+    case_risk_score = ""
+    case_findings = []
 
+    if ctx.triggered_id == "create-case-btn" and case_id:
+        targets_list = [t.strip() for t in case_targets.split(",")] if case_targets else []
+        new_case = {
+            "Case ID": case_id.strip(),
+            "Case Description": case_desc.strip() if case_desc else "",
+            "Targets": ", ".join(targets_list)
+        }
+        case_df = pd.concat([case_df, pd.DataFrame([new_case])], ignore_index=True)
+        active_case_info = f"Active Case: {case_id} — {case_desc}"
+
+    # ---- Filter CDRs based on inputs ----
     df_filtered = cdr_df.copy()
-    if caller: df_filtered = df_filtered[df_filtered["caller"].str.contains(caller, case=False, na=False)]
-    if receiver: df_filtered = df_filtered[df_filtered["receiver"].str.contains(receiver, case=False, na=False)]
-    if start_date: df_filtered = df_filtered[df_filtered["timestamp"] >= pd.to_datetime(start_date)]
-    if end_date: df_filtered = df_filtered[df_filtered["timestamp"] <= pd.to_datetime(end_date)]
+    if caller:
+        df_filtered = df_filtered[df_filtered["caller"].str.contains(caller, case=False, na=False)]
+    if receiver:
+        df_filtered = df_filtered[df_filtered["receiver"].str.contains(receiver, case=False, na=False)]
+    if start_date:
+        df_filtered = df_filtered[df_filtered["timestamp"] >= pd.to_datetime(start_date)]
+    if end_date:
+        df_filtered = df_filtered[df_filtered["timestamp"] <= pd.to_datetime(end_date)]
 
+    # ---- Apply active case filter if targets exist ----
+    if ctx.triggered_id == "create-case-btn" and case_targets:
+        targets = [t.strip() for t in case_targets.split(",")]
+        df_filtered = df_filtered[df_filtered["caller"].isin(targets) | df_filtered["receiver"].isin(targets)]
+
+    # ---- Analytics ----
+    intel_updated = analyze_cdr(df_filtered)
+    ai_report = generate_intelligence_report(df_filtered, intel_updated)
+    investigation = run_investigation(df_filtered, intel_updated)
+
+    # ---- Prepare outputs ----
     return (
-        df_filtered.to_dict("records"),
-        intel_updated["timeline"] if intel_updated["timeline"] else {},
-        intel_updated["geo_map"] if intel_updated["geo_map"] else {},
-        intel_updated["network_graph"] if intel_updated["network_graph"] else {}
+        df_filtered.to_dict("records"),                       # CDR table
+        intel_updated["timeline"] if intel_updated["timeline"] else {},  # Timeline graph
+        intel_updated["geo_map"] if intel_updated["geo_map"] else {},    # Geo map
+        intel_updated["network_graph"] if intel_updated["network_graph"] else {},  # Network graph
+        [html.Li(text) for text in ai_report],               # AI report
+        f"Risk Score: {investigation['risk_score']}/100",    # Risk score
+        [html.Li(text) for text in investigation["findings"]],  # Investigation findings
+        active_case_info,                                     # Active case info
+        f"Risk Score: {investigation['risk_score']}/100",    # Case risk score
+        [html.Li(text) for text in investigation["findings"]]  # Case findings
     )
 
+# -------------------------------
+# GENERATE INVESTIGATION REPORT
+# -------------------------------
 @app.callback(
     Output("download-report", "data"),
     Input("download-btn", "n_clicks"),
     prevent_initial_call=True
 )
 def generate_report(n_clicks):
-    buffer = io.StringIO()
-    cdr_df.to_csv(buffer, index=False)
-    buffer.seek(0)
-    return dcc.send_string(buffer.getvalue(), "cdr_evidence_report.csv")
+    intel_local = analyze_cdr(cdr_df)
+    inv = run_investigation(cdr_df, intel_local)
+
+    report_text = []
+    report_text.append("CDR INTELLIGENCE EVIDENCE REPORT\n")
+    report_text.append("=" * 40)
+    report_text.append(f"Total Records: {len(cdr_df)}")
+    report_text.append(f"Risk Score: {inv['risk_score']}/100\n")
+    report_text.append("FINDINGS:")
+    for f in inv["findings"]:
+        report_text.append(f"- {f}")
+
+    buffer = io.StringIO("\n".join(report_text))
+    return dcc.send_string(buffer.getvalue(), "cdr_investigation_report.txt")
 
 # =====================================================
 # PROTECT DASHBOARD
@@ -353,3 +641,8 @@ def protect_dashboard():
 # =====================================================
 if __name__ == "__main__":
     server.run(debug=True)
+    # =====================================================
+# RUN SERVER
+# =====================================================
+if __name__ == "__main__":
+    server.run(host="127.0.0.1", port=5000, debug=True)

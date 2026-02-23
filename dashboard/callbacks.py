@@ -65,11 +65,15 @@ def normalize_columns(df):
     return df
 
 from dash import callback, Output, Input, State
+from app import app
 
-@callback(
-    Output("upload-status", "children"),
-    Input("upload-cdr", "contents"),
-    State("upload-cdr", "filename")
+@app.callback(
+    Output("cdr-table", "data"),
+    Output("timeline-graph", "figure"),
+    Output("geo-map", "figure"),
+    Output("network-graph", "figure"),
+    Output("ai-report", "children"),
+
 )
 def handle_upload(contents, filename):
     if contents is None:
